@@ -1,0 +1,207 @@
+Seahawks Monitoring 
+
+to do : 
+	. Trello
+	. Git
+	. Documentation 
+		° demarches et choix des solutions technologique
+		° organisation de l'équipe (taches, roles, workflow) + preuves
+		° comprendre rapidement ce qui a été fait, pourquoi, comment, et l'impacts.
+		° Runbook exploitation (PDF 5-8p)
+		° illustre ou décrire les Users Stories 
+	. capture d'écran 
+	. support de soutenances :
+		° demarches suivis 
+		° difficultés rencontrées
+		° solutions mises en place
+		° résultats obtenus
+		° perspectives
+
+
+nombre vms : 2 (nester / harvester) client et serveur 
+initialiser des logs sur une machine ubuntu 
+
+Ce qu'on souhaite : 
+	-- standardiser la collecte d'infos 
+	-- outiller un support de consultation central 
+	-- accélérer les diagnostics 
+	-- pour chaque franchises faire remonter les infos sur un support de vu 
+
+
+2.1) "Seahawks Harvester"
+-- créer une VM serveur sur un parc reseau imaginaire 
+-- les informations sur le parc imaginaire sont dispo dans un fichier local contenant les données
+-- récupérer et stocker les logs 
+-- script python 
+	- (découverte d’hôtes/ports et mesures simples de connectivité)
+	- tableau de bord avec : IP/nom de la VM, nombre d’équipements détectés, résultat du dernier scan et latence WAN moyenne, ainsi que la version du composant.
+
+2.2) "Seahawks Nester"
+-- créer une VM pour héberger l'application de consultation 
+-- récupérer infos de la VM serveur et actualiser a intervalle régulier 
+-- stocker les information en local 
+-- interface utilisateur : 
+	-- Dashboard 
+	-- intégrer la documentation avec les runbook d'exploitation
+	-- afficher : liste des sondes, état connecté/déconnecté, tableau de bord d’une sonde, accès au dernier rapport.
+
+
+6) Sécurité :
+-- Moindre privilege, désactiver root
+>>> sudo passwd -l root // verrouiller le compte root et empêcher les connexion en local
+>>> adminNester : adminNesterPassword 
+-- Gestion de la configuration et des secrets
+-- Intégrité & traçabilité, chaque rapport et binaire est identifiable 
+-- usage d’un format structuré
+-- Éthique & périmètre : collectes limitées aux environnements de lab/franchise autorisés
+
+
+
+
+
+
+
+
+### SCRIPT Harvester ###
+
+
+- IP 
+- ID hôte
+- nom de la machine
+- os
+- nombre équipements détectés
+- résultat du scan 
+	- ports ouvert
+	- etc... synthèse du scan
+- latence WAN moyenne
+- version du composant 
+
+
+
+stocker le dernier resultat
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+>>>creer un serveur web NGINX 
+>>>installer python 
+recuperer le fichier de la vm franchise 
+creer l'interface simple avec un tableau et un bouton pour actualiser 
+	- lorsque j'appuie sur le bouton actualiser je récupérer le meme fichier et refresh la page. 
+	- si le fichier à été remplacer par de nouvelles infos ça ce mat a jour tt seul de la meme façon que lorsqu'on affiche les datas 
+gérer la sécurisation de la vm
+
+
+
+
+### Installation de NGINX ###
+
+sudo apt-get update
+
+sudo apt-get install nginx
+
+// etc/nginx/sites-available/default
+server {
+    listen 80;
+    server_name _;
+
+    location / {
+        root /var/www/html;  # Directory containing static files
+        index index.html index.htm;
+        try_files $uri $uri/ =404;  # Serve 404 if file not found
+    }
+
+sudo mkdir -p /var/www/html
+
+// création du fichier static test
+echo "<h1>Hello, NGINX!</h1>" | sudo tee /var/www/html/index.html
+
+sudo systemctl restart nginx
+
+
+
+### génération d'un certificat ssl autosigné ###
+
+// Générer une clé RSA de 2048 bits et la sauvegarder dans un fichier
+openssl genrsa -out mykeynester.pem 4096
+
+// génération du certificat autosigné
+openssl req -new -x509 -key mykeynester.pem -out ca.crt -days 1000
+
+
+documentation : 
+
+Pour le transfert de fichier de la machine nester vers la machine harvester, nous utilisons scp pour transferer les fichier. 
+avec SCP, les fichier sont chiffrés lors de l'envoie. 
+
+1. installation de d'OpenSSH sur les deux machines 
+2. nester recupere le fichier et l'envoie a Harvester grave à la commande : scp test.txt user@10.251.120.230:/home/user/
+3. lorsqu'on envoie un fichier avec le meme nom qu'un fichier avec le meme nom sur le repertoire distant, celui-ci est ecrassé et remplacer par la nouvelle version
+
+Pour sécuriser l'envoie et la reception, nous remplaçons le port 22 pour un autre aléatoirement dans le fichier "/etc/ssh/sshd_config"
+
+Nginx est utilisé en tant que serveur reverse proxy. Nginx redirige les requêtes HTTP vers notre application Node.js qui tourne en arrière-plan.
+
+POUR LE DASHBOARD: 
+installation de node.js et npm. initialisation de la config de nginx pour afficher le dashboard dans /var/www/dashboard/public/
+
+On utilise pm2 pour :
+- lancer l'environnement node au démarrage de la VM
+- garder l'application toujours en ligne
+- redémarre automatiquement l'application si elle plante ou si le serveur redémarre
+- faciliter la gestion et le monitoring.
+
+
+
+
+
+TO DO :
+
+- installer cron, faire les config crontab 
+- créer un dossier avec des droit de lecture 
+- faire un script qui envoie à l'autre VM le fichier, et qui stock en intern les sauvegarde 
+- utiliser SCP 
+
+- creer une paire de clés public/privé sur la machine harvester 
+	(ssh-keygen -t rsa -b 4096 -f ~/.ssh/id_rsa -C "adminNester"    # appuie sur Entrée pour accepter les chemins / passphrase vide si tu veux automatiser sans agent)
+
+- copier la clé public sur la machine nester
+	( ssh-copy-id -p 22334 -i ~/.ssh/id_rsa.pub adminNester@10.251.131.197 )
+ou sinon faire 
+	( cat ~/.ssh/id_rsa.pub | ssh -p 22334 adminNester@10.251.131.197 'mkdir -p ~/.ssh && chmod 700 ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys' )
+
+- tester la connection
+	( ssh -p 22334 adminNester@10.251.131.197 )
+
+- Script Bash : 
+
+-------------------------
+#!/bin/bash
+UTILISATEUR="adminNester"
+HOTE_DISTANT="10.251.131.197"
+PORT=22334
+CHEMIN_LOCAL="raportHarverster.json"
+CHEMIN_DISTANT="/var/www/dashboard/data/json/"
+
+scp -P "$PORT" "$CHEMIN_LOCAL" "$UTILISATEUR@$HOTE_DISTANT:$CHEMIN_DISTANT"
+-------------------------
